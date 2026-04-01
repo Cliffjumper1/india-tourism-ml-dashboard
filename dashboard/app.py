@@ -1,22 +1,27 @@
-import os
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from src.predict import predict_future
+import os
 
-
-st.set_page_config(page_title="Tourism Dashboard", layout="wide")
+st.set_page_config(
+    page_title="Tourism AI Dashboard",
+    page_icon="🌍",
+    layout="wide"
+)
 
 st.title("🇮🇳 India Tourism Analytics Dashboard")
 
-df = pd.read_csv("data/processed/cleaned_tourism.csv")
+DATA_PATH = "data/processed/cleaned_tourism.csv"
 
-st.sidebar.header("Filters")
+if not os.path.exists(DATA_PATH):
+    st.error("Processed data not found. Please upload dataset.")
+    st.stop()
+
+df = pd.read_csv(DATA_PATH)
 
 state_col = [col for col in df.columns if 'state' in col][0]
+
+st.sidebar.header("Filters")
 
 states = st.sidebar.multiselect(
     "Select State",
@@ -32,14 +37,14 @@ col1.metric("Total Tourists", int(filtered_df['total_tourists'].sum()))
 col2.metric("Avg Growth Rate", round(filtered_df['growth_rate'].mean(), 2))
 col3.metric("Records", len(filtered_df))
 
+
 st.subheader("Tourism Trends")
 
 fig = px.line(
     filtered_df,
     x="month_num",
     y="total_tourists",
-    color=state_col,
-    title="Tourists Over Months"
+    color=state_col
 )
 
 st.plotly_chart(fig, use_container_width=True)
@@ -56,28 +61,12 @@ top_states = (
 fig2 = px.bar(
     x=top_states.values,
     y=top_states.index,
-    orientation='h',
-    title="Top States by Tourism"
+    orientation='h'
 )
 
 st.plotly_chart(fig2, use_container_width=True)
 
-st.subheader("Future Predictions")
 
-months = st.slider("Select months", 1, 24, 12)
-
-future = predict_future(months)
-
-fig3 = px.line(
-    future,
-    x="month_num",
-    y="predicted_tourists",
-    title="Future Tourism Forecast"
-)
-
-st.plotly_chart(fig3, use_container_width=True)
-
-st.dataframe(future)
 st.subheader("Compare States")
 
 compare_states = st.multiselect(
@@ -86,55 +75,37 @@ compare_states = st.multiselect(
     default=df[state_col].unique()[:2]
 )
 
-if len(compare_states) > 0:
+if len(compare_states) >= 2:
     compare_df = df[df[state_col].isin(compare_states)]
 
     fig_compare = px.line(
         compare_df,
         x="month_num",
         y="total_tourists",
-        color=state_col,
-        title="State Comparison Over Time"
+        color=state_col
     )
 
     st.plotly_chart(fig_compare, use_container_width=True)
+else:
+    st.warning("Select at least 2 states")
 
-    st.subheader("Growth Rate Comparison")
 
-    fig_growth = px.line(
-        compare_df,
-        x="month_num",
-        y="growth_rate",
-        color=state_col,
-        title="Growth Rate Comparison"
-    )
-
-    st.plotly_chart(fig_growth, use_container_width=True)
-
-    st.subheader("Best State to Visit")
-
-selected_month = st.selectbox(
-    "Select Month",
-    sorted(df['month_num'].unique())
-)
-
-month_df = df[df['month_num'] == selected_month]
-
-best_state = month_df.sort_values(
-    by="total_tourists",
-    ascending=False
-).iloc[0][state_col]
-
-st.success(f"Best State in Month {selected_month}: {best_state}")
-
-st.subheader("Smart Insights")
+st.subheader("Insights")
 
 top_state = df.groupby(state_col)['total_tourists'].sum().idxmax()
-top_value = df.groupby(state_col)['total_tourists'].sum().max()
-
 fastest_growth = df.groupby(state_col)['growth_rate'].mean().idxmax()
 
-col1, col2 = st.columns(2)
+st.success(f"Top State: {top_state}")
+st.info(f"Fastest Growing: {fastest_growth}")
 
-col1.success(f"Top Tourism State: {top_state} ({int(top_value)})")
-col2.info(f"Fastest Growing State: {fastest_growth}")
+st.subheader("Best State by Month")
+
+month = st.selectbox("Select Month", sorted(df['month_num'].unique()))
+
+best_state = (
+    df[df['month_num'] == month]
+    .sort_values(by="total_tourists", ascending=False)
+    .iloc[0][state_col]
+)
+
+st.success(f"Best State in Month {month}: {best_state}")
